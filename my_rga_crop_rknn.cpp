@@ -20,10 +20,13 @@ extern "C" {
 }
 
 #include "rknnyolo.h"
+#include "gpio_controll.h"
 
 #define YOLO_MODEL_INPUT_PIC_STIDE 640
 #define YOLO_INPUT_SIZE                                                        \
   (YOLO_MODEL_INPUT_PIC_STIDE * YOLO_MODEL_INPUT_PIC_STIDE * 3)
+
+#define GPIO_CONTINOUS_US 1000000
 
 static bool quit = false;
 IMAGE_TYPE_E g_enPixFmt = IMAGE_TYPE_NV12;
@@ -40,6 +43,7 @@ RK_BOOL bMutictx = RK_FALSE;
 int ret = 0;
 char saveFilePath[128];
 static bool saveImg = false;
+int ifFoundPerson = 0;
 
 void set_vi_chn(void) {
   VI_CHN_ATTR_S viChnAttr;
@@ -109,6 +113,26 @@ int bind_rga(void) {
 static void sigterm_handler(int sig) {
   fprintf(stderr, "signal %d\n", sig);
   quit = true;
+}
+
+static void *gpio_thread(void *arg) {
+
+  struct timeval start_time, stop_time;
+  gettimeofday(&start_time, NULL);
+
+  while (quit == false) {
+    if (ifFoundPerson == 1) {
+      printf("Found person \n");
+      gpio_control(1);
+    }
+
+    usleep(GPIO_CONTINOUS_US);
+
+    gpio_control(0);
+    usleep(100000);
+  }
+
+  return NULL;
 }
 
 static void write_mb_file(MEDIA_BUFFER mb, int cnt) {
@@ -190,8 +214,9 @@ static void *get_stream_thread(void *arg) {
     // actually, will cause 20ms
 
     if (ret == 0) {
-      detect_by_buf(pRknnInputData);
-      
+
+      ifFoundPerson = detect_by_buf(pRknnInputData);
+
       if (saveImg) {
         write_rgb_file(pRknnInputData);
       }
@@ -220,7 +245,8 @@ int main(int argc, char *argv[]) {
 
   char *model_name = argv[1];
 
-  if (argv[2][0] == '-' && argv[2][1] == 's') {
+  // fix the null ptr issue
+  if (argc == 3 && argv[2][0] == '-' && argv[2][1] == 's') {
     printf("start save video\n");
     saveImg = true;
   }
@@ -232,7 +258,10 @@ int main(int argc, char *argv[]) {
   }
 
   rk_aiq_working_mode_t hdr_mode = RK_AIQ_WORKING_MODE_NORMAL;
+
+  // change fps to avoid buffer null warning
   int fps = 10;
+
   SAMPLE_COMM_ISP_Init(s32CamId, hdr_mode, bMutictx, pciqFileDir);
   SAMPLE_COMM_ISP_Run(s32CamId);
   SAMPLE_COMM_ISP_SetFrameRate(s32CamId, fps);
@@ -251,6 +280,9 @@ int main(int argc, char *argv[]) {
 
   pthread_t read_thread_id;
   pthread_create(&read_thread_id, NULL, get_stream_thread, NULL);
+
+  pthread_t gpio_thread_id;
+  pthread_create(&gpio_thread_id, NULL, gpio_thread, NULL);
 
   usleep(1000); // waite for thread ready.
 

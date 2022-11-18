@@ -1,0 +1,30 @@
+20221118 update
+
+1. remove all old files in yolo_detect/build/*
+
+2. change yolo_detect/build_detect_lib.sh, 
+
+point toolchain pos to your own position 
+
+RK1126_TOOL_CHAIN="/home/marc/ebat2.25sdk/sdk20210512/prebuilts/gcc/linux-x86/arm/gcc-arm-8.3-2019.03-x86_64-arm-linux-gnueabihf"
+
+3. also same way to change build_all.sh
+
+4. try to run ./build_all.sh
+
+5. move the app from /build/rga_yolo to your rv1126 board with model file, jpeg lib file, and coco class file.
+
+6. when you use ./rga_yolo rknn_xxx_model_filename.rknn -s it will generate rgb raw file to /tmp folder, it will fill your disk real quickly, so don't use it in production env.
+
+7. use adb pull /tmp/rga_number.rgb /tmp to pull the rgb file from rv1126 to your ubuntu
+
+8. use sudo apt install ffmpeg to install encode tool
+
+9. use 
+
+ffmpeg -f rawvideo -pixel_format rgb24 -video_size 640x640 -i rga_xxx.rgb output.png
+
+to trans rgb raw file to png file.
+
+10. dont hasite to tell me if you meet any problem
+
